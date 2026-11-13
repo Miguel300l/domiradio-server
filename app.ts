@@ -17,7 +17,7 @@ const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema(
 
 // En serverless se reutiliza la conexión entre invocaciones
 let conn: Promise<typeof mongoose> | null = null;
-const db = () => (conn ??= mongoose.connect(env.MONGO_URI));
+const db = () => (conn ??= mongoose.connect(env.MONGO_URI).catch((e) => { conn = null; throw e; }));
 
 const app = express();
 app.use(cors());
