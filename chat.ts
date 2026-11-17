@@ -6,6 +6,7 @@ const Message = mongoose.models.Message || mongoose.model('Message', new mongoos
   from: { type: String, required: true, index: true },
   to: { type: String, required: true, index: true },
   text: { type: String, required: true, maxlength: 1000 },
+  read: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now, index: true },
 }));
 
@@ -33,6 +34,8 @@ router.get('/messages/:other', async (req, res) => {
   const q: any = { $or: [{ from: me, to: other }, { from: other, to: me }] };
   if (req.query.after) q.createdAt = { $gt: new Date(String(req.query.after)) };
   const msgs = await Message.find(q).sort({ createdAt: -1 }).limit(100).lean();
+  // Al abrir la conversación, lo recibido queda como leído
+  await Message.updateMany({ from: other, to: me, read: { $ne: true } }, { $set: { read: true } });
   res.json(msgs.reverse().map(fmt));
 });
 
@@ -46,6 +49,31 @@ router.post('/messages', async (req, res) => {
     return res.status(404).json({ error: 'Usuario no encontrado' });
   const m = await Message.create({ from: me, to, text });
   res.json(fmt(m));
+});
+
+// Lista de conversaciones: último mensaje y no leídos de cada una, la más reciente primero
+router.get('/conversations', async (req, res) => {
+  const me = (req as any).user.id;
+  const rows = await Message.aggregate([
+    { $match: { $or: [{ from: me }, { to: me }] } },
+    { $addFields: { other: { $cond: [{ $eq: ['$from', me] }, '$to', '$from'] } } },
+    { $sort: { createdAt: -1 } },
+    { $group: {
+        _id: '$other',
+        last: { $first: '$$ROOT' },
+        unread: { $sum: { $cond: [{ $and: [{ $eq: ['$to', me] }, { $ne: ['$read', true] }] }, 1, 0] } },
+    } },
+    { $sort: { 'last.createdAt': -1 } },
+    { $limit: 100 },
+  ]);
+  const users = await mongoose.model('User').find({ _id: { $in: rows.map((r: any) => r._id) } }, 'name').lean();
+  const names = new Map<string, string>(users.map((u: any) => [String(u._id), u.name]));
+  res.json(rows.filter((r: any) => names.has(r._id)).map((r: any) => ({
+    id: r._id,
+    name: names.get(r._id),
+    unread: r.unread,
+    last: { text: r.last.text, from: r.last.from, createdAt: new Date(r.last.createdAt).toISOString() },
+  })));
 });
 
 export default router;
