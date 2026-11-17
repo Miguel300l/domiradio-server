@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { AccessToken } from 'livekit-server-sdk';
+import chat from './chat';
 
 const env = process.env as Record<string, string>;
 const ROOM = 'canal-general';
@@ -61,6 +62,8 @@ app.post('/livekit/token', auth, async (req, res) => {
   at.addGrant({ room: ROOM, roomJoin: true, canPublish: true, canSubscribe: true, canUpdateOwnMetadata: true });
   res.json({ token: await at.toJwt(), url: env.LIVEKIT_URL });
 });
+
+app.use('/chat', chat);
 
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);
