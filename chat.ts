@@ -23,8 +23,8 @@ router.use((req, res, next) => {
 // Lista de usuarios con quienes se puede chatear
 router.get('/users', async (req, res) => {
   const me = (req as any).user.id;
-  const users = await mongoose.model('User').find({ _id: { $ne: me } }, 'name').sort({ name: 1 }).lean();
-  res.json(users.map((u: any) => ({ id: String(u._id), name: u.name })));
+  const users = await mongoose.model('User').find({ _id: { $ne: me } }, 'name nickname').sort({ name: 1 }).lean();
+  res.json(users.map((u: any) => ({ id: String(u._id), name: u.nickname || u.name })));
 });
 
 // Conversación entre yo y otro usuario (últimos 100, o solo los nuevos con ?after=)
@@ -66,8 +66,8 @@ router.get('/conversations', async (req, res) => {
     { $sort: { 'last.createdAt': -1 } },
     { $limit: 100 },
   ]);
-  const users = await mongoose.model('User').find({ _id: { $in: rows.map((r: any) => r._id) } }, 'name').lean();
-  const names = new Map<string, string>(users.map((u: any) => [String(u._id), u.name]));
+  const users = await mongoose.model('User').find({ _id: { $in: rows.map((r: any) => r._id) } }, 'name nickname').lean();
+  const names = new Map<string, string>(users.map((u: any) => [String(u._id), u.nickname || u.name]));
   res.json(rows.filter((r: any) => names.has(r._id)).map((r: any) => ({
     id: r._id,
     name: names.get(r._id),
